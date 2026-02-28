@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sim Digital | CGNAT Traceability</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/pt.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap');
+        :root { --bg-main: #0a0c10; --bg-card: #11141a; --accent: #2563eb; --border: #1f242d; }
+        body { background-color: var(--bg-main); color: #d1d5db; font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        .noc-card { background: var(--bg-card); border: 1px solid var(--border); }
+        .input-noc { background: #0d0f14; border: 1px solid var(--border); color: #fff; }
+        .input-noc:focus { border-color: var(--accent); outline: none; }
+        .btn-noc { background: var(--accent); font-weight: 700; transition: all 0.2s; }
+        .btn-noc:hover { filter: brightness(1.2); transform: translateY(-1px); }
+        
+        /* REMOVE SETAS BRANCAS DO CAMPO DE PORTA */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        .modal-bg { background: rgba(0,0,0,0.9); backdrop-filter: blur(8px); }
+        @media print { .no-print { display: none; } body { background: white; color: black; } .noc-card { border: 1px solid #ccc; box-shadow: none; } }
+    </style>
+    <script>
+        // Proteção de Rota: Redireciona se não houver token
+        if (!localStorage.getItem('cgnat_token')) window.location.href = '/';
+    </script>
+</head>
+<body class="min-h-screen">
+
+    <nav class="no-print border-b border-[#1f242d] bg-[#11141a] px-6 py-3 flex justify-between items-center">
+        <div class="flex items-center gap-4">
+            <div class="bg-blue-600 p-1.5 rounded"><i data-lucide="activity" class="w-5 h-5 text-white"></i></div>
+            <span class="font-bold text-white tracking-tight uppercase text-sm">Sim Digital Trace Engine <span class="text-slate-500 font-normal ml-2">v2.5.0</span></span>
+        </div>
+        <div class="flex items-center gap-6">
+            <div id="db-status" class="flex items-center gap-2 text-xs font-medium text-slate-500">
+                <span id="db-status-dot" class="w-2 h-2 bg-slate-500 rounded-full"></span>
+                <span id="db-status-text">SYNCING...</span>
+            </div>
+            <button onclick="toggleModal('modal-usuarios')" class="text-[10px] font-bold text-blue-400 uppercase border border-blue-400/30 px-3 py-1 rounded hover:bg-blue-400 hover:text-white transition-all">
+                Gestão de Operadores
+            </button>
+            <button onclick="localStorage.clear(); window.location.href='/';" class="text-[10px] font-bold text-red-500 uppercase">Sair</button>
+        </div>
+    </nav>
+
+    <main class="max-w-6xl mx-auto mt-12 px-6 pb-12">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-4 no-print">
+                <div class="noc-card rounded-lg p-6">
+                    <h2 class="text-[10px] font-bold text-slate-500 uppercase mb-6 tracking-widest">Parâmetros do Ofício</h2>
+                    <div class="space-y-5">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-2 uppercase">IP Público Alvo</label>
+                            <input type="text" id="ip" placeholder="45.182.243.xx" class="input-noc w-full px-4 py-2.5 rounded font-mono text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-2 uppercase">Porta</label>
+                            <input type="number" id="porta" placeholder="55439" class="input-noc w-full px-4 py-2.5 rounded font-mono text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-2 uppercase">Data e Hora (GMT/UTC)</label>
+                            <input type="text" id="data" class="input-noc w-full px-4 py-2.5 rounded font-mono text-sm cursor-pointer">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-2 uppercase">Fuso Horário Solicitado</label>
+                            <select id="fuso" class="input-noc w-full px-4 py-2.5 rounded font-mono text-sm">
+                                <option value="-03">UTC-3 (Brasília/Ofício)</option>
+                                <option value="-04">UTC-4 (Santiago/Local)</option>
+                                <option value="+00">UTC+0 (GMT/Log)</option>
+                            </select>
+                        </div>
+                        <button onclick="buscar()" id="btn-buscar" class="btn-noc w-full py-3 rounded text-sm flex items-center justify-center gap-2 mt-4 text-white">
+                            <i data-lucide="search" class="w-4 h-4"></i> EXECUTE TRACE
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-8">
+                <div id="welcome-msg" class="h-64 border border-dashed border-[#1f242d] rounded-lg flex flex-col items-center justify-center text-slate-600">
+                    <i data-lucide="shield-check" class="w-12 h-12 mb-4 opacity-20"></i>
+                    <p class="text-sm">Insira os dados do ofício para iniciar a quebra de sigilo.</p>
+                </div>
+                <div id="loading" class="hidden h-64 flex flex-col items-center justify-center">
+                    <div class="w-10 h-10 border-2 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-blue-500">Varrendo Partições PostgreSQL...</span>
+                </div>
+                <div id="resultado" class="hidden space-y-4">
+                    <div class="noc-card rounded-lg overflow-hidden border-t-4 border-t-blue-600">
+                        <div class="px-6 py-4 border-b border-[#1f242d] bg-[#151921] flex justify-between items-center">
+                            <h3 class="text-xs font-bold text-white uppercase tracking-widest">Resultado da Auditoria</h3>
+                            <button onclick="window.print()" class="no-print text-[10px] bg-blue-600/20 text-blue-400 px-3 py-1 rounded font-bold uppercase hover:bg-blue-600 hover:text-white">Imprimir Relatório</button>
+                        </div>
+                        <div class="p-8">
+                            <div class="grid grid-cols-2 gap-8 mb-10">
+                                <div>
+                                    <p class="text-[10px] font-bold text-slate-500 uppercase mb-2">Cliente Identificado (IP Privado)</p>
+                                    <p id="res-privado" class="text-4xl mono font-extrabold text-white">--</p>
+                                </div>
+                                <div>
+                                    <p class="text-[10px] font-bold text-slate-500 uppercase mb-2">Status no Momento do Incidente</p>
+                                    <p id="res-status" class="text-lg font-bold">--</p>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4 border-t border-[#1f242d] pt-8">
+                                <div class="bg-[#0d0f14] p-5 rounded border border-[#1f242d]">
+                                    <span class="text-[9px] font-bold text-slate-500 uppercase block mb-1">Abertura NAT (ADD)</span>
+                                    <span id="res-inicio" class="text-md mono text-white font-bold">--</span>
+                                </div>
+                                <div class="bg-[#0d0f14] p-5 rounded border border-[#1f242d]">
+                                    <span class="text-[9px] font-bold text-slate-500 uppercase block mb-1">Fechamento NAT (DELETE)</span>
+                                    <span id="res-fim" class="text-md mono text-white font-bold">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="modal-usuarios" class="hidden fixed inset-0 z-50 modal-bg flex items-center justify-center p-6">
+        <div class="noc-card w-full max-w-4xl rounded-3xl overflow-hidden grid grid-cols-2 shadow-2xl relative">
+            <button onclick="toggleModal('modal-usuarios')" class="absolute top-6 right-6 text-slate-500 hover:text-white transition-colors">
+                <i data-lucide="x" class="w-6 h-6"></i>
+            </button>
+            <div class="p-10 border-r border-[#1f242d]">
+                <h3 class="text-xs font-bold text-blue-500 uppercase mb-8">Novo Cadastro</h3>
+                <div class="space-y-4">
+                    <input type="text" id="n-nome" placeholder="Nome Completo" class="input-noc w-full px-5 py-3 rounded-xl text-xs">
+                    <input type="text" id="n-user" placeholder="Login (Username)" class="input-noc w-full px-5 py-3 rounded-xl text-xs">
+                    <input type="password" id="n-pass" placeholder="Senha Inicial" class="input-noc w-full px-5 py-3 rounded-xl text-xs">
+                    <button onclick="cadastrarUsuario()" class="w-full bg-blue-600 py-3 rounded-xl text-[10px] font-bold uppercase text-white hover:brightness-110">Salvar no Banco</button>
+                    
+                    <div class="border-t border-[#1f242d] pt-6 mt-6">
+                        <label class="block text-[10px] font-bold text-slate-500 mb-2 uppercase">Minha Senha</label>
+                        <div class="flex gap-2">
+                            <input type="password" id="nova-senha" placeholder="Nova senha" class="input-noc flex-1 px-4 py-2 rounded-lg text-xs">
+                            <button onclick="alterarSenha()" class="bg-slate-700 text-white px-4 py-2 rounded-lg text-[10px] font-bold uppercase">Trocar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="p-10 bg-[#0d0f14]">
+                <h3 class="text-xs font-bold text-slate-500 uppercase mb-8">Operadores Ativos</h3>
+                <div id="lista-usuarios" class="space-y-3 max-h-80 overflow-y-auto pr-2"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        flatpickr("#data", { enableTime: true, dateFormat: "Y-m-d H:i:S", altInput: true, altFormat: "d/m/Y H:i:S", enableSeconds: true, time_24hr: true, locale: "pt" });
+
+        function toggleModal(id) { 
+            const m = document.getElementById(id); 
+            m.classList.toggle('hidden');
+            if(!m.classList.contains('hidden')) carregarUsuarios();
+        }
+
+        async function checkDatabase() {
+            try {
+                const r = await fetch('/health');
+                const d = await r.json();
+                if (d.status === "online") {
+                    document.getElementById('db-status-dot').className = 'w-2 h-2 bg-green-500 rounded-full';
+                    document.getElementById('db-status-text').textContent = 'DB ONLINE';
+                }
+            } catch (e) {
+                document.getElementById('db-status-dot').className = 'w-2 h-2 bg-red-500 rounded-full';
+                document.getElementById('db-status-text').textContent = 'DB OFFLINE';
+            }
+        }
+
+        async function carregarUsuarios() {
+            const token = localStorage.getItem('cgnat_token');
+            const r = await fetch('/usuarios/listar', { headers: {'Authorization': `Bearer ${token}`} });
+            const users = await r.json();
+            const list = document.getElementById('lista-usuarios');
+            list.innerHTML = users.map(u => `
+                <div class="flex justify-between items-center bg-[#11141a] p-4 rounded-xl border border-[#1f242d]">
+                    <div>
+                        <p class="text-[10px] font-bold text-white uppercase">${u.nome_completo}</p>
+                        <p class="text-[8px] text-slate-500 mono">${u.username}</p>
+                    </div>
+                    <button onclick="deletarUsuario(${u.id})" class="text-red-500 hover:bg-red-500/10 p-2 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        async function cadastrarUsuario() {
+            const data = { nome: document.getElementById('n-nome').value, username: document.getElementById('n-user').value, password: document.getElementById('n-pass').value };
+            const token = localStorage.getItem('cgnat_token');
+            const r = await fetch('/usuarios/criar', { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+            if (r.ok) { alert("Operador cadastrado!"); carregarUsuarios(); }
+        }
+
+        async function deletarUsuario(id) {
+            if(!confirm("Remover acesso?")) return;
+            const token = localStorage.getItem('cgnat_token');
+            const r = await fetch(`/usuarios/deletar/${id}`, { method: 'DELETE', headers: {'Authorization': `Bearer ${token}`} });
+            if (r.ok) carregarUsuarios(); else alert("Apenas admin pode remover acessos.");
+        }
+
+        async function alterarSenha() {
+            const token = localStorage.getItem('cgnat_token');
+            const r = await fetch('/usuarios/trocar-senha', { method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ nova_senha: document.getElementById('nova-senha').value }) });
+            if (r.ok) { alert("Senha alterada! Relogue."); localStorage.clear(); location.href = '/'; }
+        }
+
+        async function buscar() {
+            const token = localStorage.getItem('cgnat_token');
+            const params = { ip: document.getElementById('ip').value, porta: document.getElementById('porta').value, data: document.getElementById('data').value, fuso: document.getElementById('fuso').value };
+            if (!params.ip || !params.porta || !params.data) return alert("Preencha todos os campos.");
+            document.getElementById('welcome-msg').classList.add('hidden');
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('resultado').classList.add('hidden');
+            try {
+                const r = await fetch(`/search?ip=${params.ip}&porta=${params.porta}&data_hora=${encodeURIComponent(params.data)}&fuso=${params.fuso}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const j = await r.json();
+                if (r.ok) {
+                    document.getElementById('res-privado').innerText = j.src_ip_priv;
+                    document.getElementById('res-inicio').innerText = j.inicio_conexao;
+                    document.getElementById('res-fim').innerText = j.fim_conexao;
+                    document.getElementById('res-status').innerText = j.status;
+                    document.getElementById('res-status').className = j.status.includes("ONLINE") ? "text-green-500 font-bold" : "text-red-500 font-bold";
+                    document.getElementById('resultado').classList.remove('hidden');
+                } else { alert("Nenhum registro encontrado."); document.getElementById('welcome-msg').classList.remove('hidden'); }
+            } catch (e) { alert("Erro de comunicação."); } finally { document.getElementById('loading').classList.add('hidden'); }
+        }
+        window.onload = checkDatabase;
+    </script>
+</body>
+</html>

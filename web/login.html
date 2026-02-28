@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>SISTEMA CGNAT | SIM DIGITAL</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;800&family=JetBrains+Mono&display=swap');
+        body { background: #02040a; font-family: 'Plus Jakarta Sans', sans-serif; overflow: hidden; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        #canvas-bg { position: fixed; top: 0; left: 0; z-index: 1; opacity: 0.3; }
+        .auth-card { background: rgba(13, 17, 23, 0.75); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.08); position: relative; z-index: 10; box-shadow: 0 0 80px rgba(0, 0, 0, 0.5); }
+        .input-field { background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.05); color: white; transition: 0.3s; }
+        .input-field:focus { border-color: #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.2); outline: none; }
+        .terminal-text { font-family: 'JetBrains Mono', monospace; }
+    </style>
+</head>
+<body>
+    <canvas id="canvas-bg"></canvas>
+    <div class="auth-card p-12 rounded-[2.5rem] w-full max-w-md">
+        <div class="text-center mb-10">
+            <div class="inline-flex w-16 h-16 rounded-2xl bg-blue-600/10 border border-blue-500/20 items-center justify-center mb-6">
+                <i data-lucide="fingerprint" class="w-8 h-8 text-blue-500"></i>
+            </div>
+            <h1 class="text-2xl font-black text-white uppercase tracking-tighter">Autenticação <span class="text-blue-500">NOC</span></h1>
+            <p class="text-slate-500 text-[9px] font-bold uppercase tracking-[0.4em] mt-2 terminal-text">Sim Digital Trace Engine</p>
+        </div>
+        <form id="loginForm" class="space-y-6">
+            <input type="text" id="username" required class="input-field w-full px-6 py-4 rounded-2xl text-sm" placeholder="Utilizador">
+            <input type="password" id="password" required class="input-field w-full px-6 py-4 rounded-2xl text-sm" placeholder="Senha">
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-900/20">Login</button>
+        </form>
+    </div>
+    <script>
+        lucide.createIcons();
+        const canvas = document.getElementById('canvas-bg'); const ctx = canvas.getContext('2d'); let particles = [];
+        function init() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        class P { constructor() { this.x = Math.random()*canvas.width; this.y = Math.random()*canvas.height; this.vX = Math.random()*0.4-0.2; this.vY = Math.random()*0.4-0.2; } update() { this.x+=this.vX; this.y+=this.vY; if(this.x>canvas.width||this.x<0)this.vX*=-1; if(this.y>canvas.height||this.y<0)this.vY*=-1; } draw() { ctx.fillStyle='rgba(59,130,246,0.5)'; ctx.beginPath(); ctx.arc(this.x,this.y,1,0,Math.PI*2); ctx.fill(); } }
+        function animate() { ctx.clearRect(0,0,canvas.width,canvas.height); particles.forEach(p => { p.update(); p.draw(); }); requestAnimationFrame(animate); }
+        init(); for(let i=0;i<80;i++) particles.push(new P()); animate();
+        document.getElementById('loginForm').onsubmit = async (e) => {
+            e.preventDefault(); const f = new FormData(); f.append('username', document.getElementById('username').value); f.append('password', document.getElementById('password').value);
+            const r = await fetch('/token', { method: 'POST', body: f });
+            if(r.ok) { const d = await r.json(); localStorage.setItem('cgnat_token', d.access_token); window.location.href='/dashboard'; } else { alert("Acesso Negado."); }
+        };
+    </script>
+</body>
+</html>
