@@ -5,3 +5,5 @@ __pycache__/
 nohup.out
 web/nohup.out
 importer.py
+consulta_cgnat.py
+procurar_cgnat.py
